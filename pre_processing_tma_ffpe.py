@@ -6,11 +6,13 @@ from scipy import signal, interpolate # Smooth the rowsums of the image when mak
 import itertools as it
 from tqdm import tqdm
 from openslide.deepzoom import DeepZoomGenerator
+import argparse
 
+parser = argparse.ArgumentParser(description='TMA FFPE Pre-Processing pipeline')
+parser.add_argument('--path_to_slides', nargs = "+", type=str, default='', help='path to directory with files')
+parser.add_argument('--output_h5', type=str, default="", help='Output directory for h5 files')
+parser.add_argument('--output', type=str, default="", help='Output directory')
 
-path = "/rds/general/user/vg816/projects/ambientms/ephemeral/breast_tma/"
-h5_output_dir = "/rds/general/user/vg816/projects/ambientms/ephemeral/breast_tma_h5/"
-path_save = "/rds/general/user/vg816/home/Zoltan_Data/"
 
 def homogeneous_background(img, nconds=4):
     bckgmask = np.all(img == [[[0,0,0]]], axis=(2))
@@ -198,7 +200,9 @@ def create_dictionary(grid, slides, hdf5, target, mult, level, save):
         
         
 def main(): 
-    list_dir = [path]
+    global args
+    args = parser.parse_args()
+    list_dir = [args.path_to_slides]
     images_filename = paths_to_slides(list_dir)
     
     grid_final = []
@@ -216,16 +220,16 @@ def main():
             sf1 = image.level_dimensions[1][0]/thumb.size[0] # Level 1 / Thumbnail
             sf2 = image.level_dimensions[1][1]/image.dimensions[1] # Level 1 / Level 0
             sf3 = image.dimensions[0]/thumb.size[0] # Level 0 / Thumbnail
-            tiles, coord, h5_name, targets, slides = get_info(fname, squares_information, h5_output_dir, sf3)
+            tiles, coord, h5_name, targets, slides = get_info(fname, squares_information, args.output_h5, sf3)
         
-            h5_files = [h5_output_dir + h5 for h5 in h5_name]
+            h5_files = [args.output_h5 + h5 for h5 in h5_name]
         
             grid_final.extend(coord)
             hdf5_final.extend(h5_files)
             targets_final.extend(targets)
             slides_final.extend(slides)
         
-    create_dictionary(grid = grid_final,slides = slides_final, target = targets_final, mult = 1, level = 0,hdf5 = hdf5_final, save = path_save)
+    create_dictionary(grid = grid_final,slides = slides_final, target = targets_final, mult = 1, level = 0,hdf5 = hdf5_final, save = args.output)
             
 
 if __name__ == "__main__":
