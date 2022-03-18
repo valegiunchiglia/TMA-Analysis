@@ -1,4 +1,5 @@
-# Diagnostic Workflow: Automated Mass Spectrometry Imaging Analysis on Formalin-Fixed and Paraffin Embedded Breast Cancer Tissue Samples 
+# Automated cancer diagnostics via analysis of optical and chemical images by deep and shallow learning
+
 
 This is the repository for the paper "Diagnostic Workflow: Automated Mass Spectrometry Imaging Analysis on Formalin-Fixed and Paraffin Embedded Breast Cancer Tissue Samples". 
 
