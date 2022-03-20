@@ -5,19 +5,17 @@ samples for Deep-Learning based tumor prediction
 Author: Valentina Giunchiglia
 """
 import os
-import sys
 import itertools
 import argparse
 
-import cv2
+import torch
 import h5py
 import numpy as np
-import matplotlib.pyplot as plt
 import openslide
-from skimage import feature, morphology, filters, color
-from scipy import signal, interpolate 
-from tqdm import tqdm
 from openslide.deepzoom import DeepZoomGenerator
+from skimage.color import rgb2hsv
+from scipy import signal 
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='TMA FFPE Pre-Processing pipeline')
 parser.add_argument('--path_to_slides', nargs = "+", type=str, default='',
@@ -89,7 +87,7 @@ def split_tissue_as_grid(thumbnail, channel = "s"):
     """
     chann = {"h":0, "s":1, "v":2}
     thumb_arr = np.array(thumbnail)
-    hsv = color.rgb2hsv(thumb_arr)[:,:,chann[channel]]
+    hsv = rgb2hsv(thumb_arr)[:,:,chann[channel]]
 
     rowsums, colsums = hsv.sum(1), hsv.sum(0)
     win = signal.windows.hann(300)
