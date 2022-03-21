@@ -16,7 +16,7 @@ from scipy import signal, interpolate
 import warnings
 from tqdm import tqdm
 import argparse
-from utils import windows, areas_keep
+from utils import windows, areas_keep, imgs, img_healthy
 
 
 
