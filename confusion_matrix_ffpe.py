@@ -186,10 +186,6 @@ def split_grid_3d_sorted(img, window_size):
 
 
 
-imgs = ["TMA52", "TMA53", "TMA51", "TMA58", "TMA54", "TMA63", "TMA55", "TMA59", "TMA60"]
-img_healthy = ["TMA44", "TMA45"]
-
-
 
 def main():
     global args
