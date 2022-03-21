@@ -5,6 +5,11 @@ windows = {"TMA52": 100, "TMA53": 100,"TMA51": 100,"TMA58":100  ,"TMA59": 60,"TM
            "TMA60":100, "TMA44":100, "TMA45":75}
 
 
+# Define which slide is healthy (img_healthy) and which one is tumour
+imgs = ["TMA52", "TMA53", "TMA51", "TMA58", "TMA54", "TMA63", "TMA55", "TMA59", "TMA60"]
+img_healthy = ["TMA44", "TMA45"]
+
+
 
 # Manual Extraction of the cores that were analysed for the shallow learning approach
 areas_keep = {
