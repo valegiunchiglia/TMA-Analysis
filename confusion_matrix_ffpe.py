@@ -4,7 +4,6 @@ samples for Deep-Learning based tumor prediction
 Author: Valentina Giunchiglia
 """
 
-
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
 import openslide, torch, cv2, sys, os
@@ -220,6 +219,9 @@ def main():
 
             prediction_performance.append(perf)
 
-
-    pd.DataFrame(prediction_performance).to_csv("/rds/general/user/vg816/home/Zoltan_Data/TMA_prediction_performance_vs_area_threshold_complete.csv")
+    if not os.path.exists(args.output):
+      os.makedirs(args.output)
+    out_filename = os.path.join(args.output, 
+                                "TMA_prediction_performance_vs_area_threshold_complete.csv")
+    pd.DataFrame(prediction_performance).to_csv(out_filename)
 
