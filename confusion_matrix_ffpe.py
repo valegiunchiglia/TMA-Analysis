@@ -4,20 +4,19 @@ samples for Deep-Learning based tumor prediction
 Author: Valentina Giunchiglia
 """
 
-import numpy as np, pandas as pd
-import matplotlib.pyplot as plt
-import openslide, torch, cv2, sys, os
-from PIL import Image, ImageDraw
-from tqdm import tqdm
-from skimage import measure, filters, segmentation, color, morphology, feature, transform
+import sys
+import os
 import itertools as it
-from scipy import signal, interpolate
-import warnings
+import numpy as np
+import pandas as pd
+import openslide
+import torch
 from tqdm import tqdm
-import argparse
-from utils import windows, areas_keep, imgs, img_healthy
-
-
+from skimage import filters, color, morphology, transform
+from scipy import signal
+from constants import areas_keep, img_names_healthy, img_names_tumor, thresh_combis, windows
+from tma_coords import tma_coords
+from datetime import datetime
 
 
 parser = argparse.ArgumentParser(description='Pipeline used to create confusion matrix of Deep Learning output')
@@ -33,38 +32,77 @@ parser.add_argument('--test_dict', type=str, default="",
                     help='Path to test dictionary used to test the DL model')
 
 
+def main():
+
+    prob_dict = torch.load("ordered_perc_test.pth")
+    train_dict = torch.load("testing_newslides_06_final_correct-03.pth")
+
+    prediction_performance = []
+    for thresh_area, thresh_prob in tqdm(thresh_combis,
+                                         desc = "Area/probs threshold combis"):
+        total_tumour = 0
+        total_tumo_detected = 0
+        for file_name in img_names_tumor:
+            window_size = windows[file_name]
+            cores_keep = areas_keep[file_name]
+            grid_regions = tma_coords[file_name]
+            region_present, N = tumour_regions(
+                prob_dict, train_dict, file_name, thresh_area, 
+                window_size, cores_keep, thresh_prob, grid_regions
+            )
+            total_tumour += N
+            total_tumo_detected += region_present
+
+        total_he = 0
+        he_detected = 0
+        for file_name in img_names_healthy:
+            window_size = windows[file_name]
+            cores_keep = areas_keep[file_name]
+            grid_regions = tma_coords[file_name]
+            region_present, N = tumour_regions(
+                prob_dict, train_dict, file_name, thresh_area, 
+                window_size, cores_keep, thresh_prob, grid_regions
+            )
+            total_he += N
+            he_detected  += (N-region_present)
+    
+        perf = {
+            "thresh_area":thresh_area, "thresh_prob":thresh_prob,
+            "tp": total_tumo_detected, "tn": he_detected,
+            "fp":total_he-he_detected, "fn":total_tumour-total_tumo_detected
+        }
+    
+        prediction_performance.append(perf)
+
+    now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    pd.DataFrame(prediction_performance).to_csv(
+        f"TMA_prediction_performance_vs_area_threshold_complete_{now}.csv"
+    )
 
 
-
-def tumour_regions(prob_dict, train_dict, name_file, thresh_area, window_size, cores_keep, thresh_prob):
+def tumour_regions(prob_dict, train_dict, file_name, thresh_area, window_size, cores_keep, thresh_prob, grid_regions):
     # Find the probability that belong to the specific file
-    indices = [e for e,name in enumerate(train_dict["slides"]) if name_file in name]
+    indices = [e for e,name in enumerate(train_dict["slides"]) if file_name in name]
     
     # Create the heatmap
     mask_prob, image = heatmap_probs_tma(prob_dict, train_dict, indices)
-    
-    
+    # Filter the regions with a probability below 0.5
+    mask_prob2 = mask_prob.copy()
+    mask_prob2[mask_prob2 >= thresh_prob] = 255
+    predicted_tum = mask_prob2.copy()
+
     # Rescale the image for easier identification of the circles
     smaller_img = transform.rescale(np.array(image), 0.25, order=3, multichannel=True)
-    
     # Use otsu to detect the circles
     gray_img = color.rgb2gray(smaller_img)
     img_otsu = gray_img < filters.threshold_otsu(gray_img)
     otsu_filtered = filters.median(img_otsu, morphology.disk(11)) > 0.5
     
     # Detect the number of connected regions
-    tumor_region_stack, grid_regions, gridC, gridR = split_grid_3d_sorted(otsu_filtered, window_size)
-    
-    
-    # Filter the regions with a probability below 0.5
-    mask_prob2 = mask_prob.copy()
-    mask_prob2[mask_prob2 >= thresh_prob] = 255
-    lab, num = measure.label(mask_prob2, return_num=True)
-    properties = ['area']
-    df = pd.DataFrame(measure.regionprops_table(lab,mask_prob2, properties = properties))
-    #df = df[(df['area'] > 500)]
-
-    predicted_tum = mask_prob2.copy()
+    tumor_region_stack, grid_regions = split_grid_3d_sorted(otsu_filtered,
+                                                            window_size,
+                                                            grid_regions,
+                                                            whole_square = True)
     
     # Resize the image with the predicted probabilities
     minitum = transform.resize(predicted_tum, tumor_region_stack.shape[1:], preserve_range=True)
@@ -81,23 +119,20 @@ def tumour_regions(prob_dict, train_dict, name_file, thresh_area, window_size, c
     total_regions = len(areas_keep)
     region_present = (areas_keep > thresh_area).sum()
     return region_present, total_regions
-
-    
-    
-    
+      
 def heatmap_probs_tma(prob_dict, train_dict, indices):
     
     slide = train_dict["slides"][indices[0]]
-    img = openslide.OpenSlide(slide)
+    basename = os.path.basename(slide)
+    img = openslide.OpenSlide("IMAGES_NEW/" + basename)
     img_thumb = img.get_thumbnail((4000, 4000))
     image_final = np.zeros(img_thumb.size[:2])
     scale_factor = img_thumb.size[0] / img.dimensions[0]
     slideID = prob_dict["slideIDX"]
     
-    for k in tqdm(indices):
+    for k in indices:
         if k not in slideID:
             continue
-            
         hres_coord = train_dict["grid"][k]
         lowres_coords = []
         for x, y in hres_coord:
@@ -122,7 +157,6 @@ def heatmap_probs_tma(prob_dict, train_dict, indices):
         
     return image_final.T, img_thumb
 
-## Summarize as function
 def split_as_grid(img, window_size=80):
     
     if len(img.shape) == 3:
@@ -139,8 +173,8 @@ def split_as_grid(img, window_size=80):
 
     rel_min_c = signal.argrelmin(smooth_c)[0].tolist()
     rel_min_r = signal.argrelmin(smooth_r)[0].tolist()
-    return [0]+rel_min_c+[img.shape[1]], [0]+rel_min_r+[img.shape[0]]
     #return [0]+rel_min_c, [0]+rel_min_r
+    return [0]+rel_min_c+[img.shape[1]], [0]+rel_min_r+[img.shape[0]]
 
 
 def define_squares_from_grid(grid_cols, grid_rows):
@@ -158,70 +192,35 @@ def define_squares_from_grid(grid_cols, grid_rows):
     return squares_info
 
 
-def split_grid_3d_sorted(img, window_size):
+  def split_grid_3d_sorted(otsu_img:np.array, window_size:int,
+                         grid_regions:list=None, whole_square:bool=False):
     """
-    Input is otsu image
-
-    gridC, window = 0,0
-    while gridC != ncols and window <= 2000:
-        window += 10
-        gridC, gridR = split_as_grid(img, window_size=window)
-        
-    if window > 200:
-        warnings.warn("Optimal window size not found, {} columns produced".format(len(gridC)-2))
-    """ 
-    grid_c, grid_r = split_as_grid(img, window_size=window_size)
-    
-    grid_regions = define_squares_from_grid(grid_c, grid_r)
-    stack = np.zeros((len(grid_regions), img.shape[0], img.shape[1]))
-    stack[:, :, :] = np.expand_dims(img, 0)
-    
+    Parameters
+    ----------
+    otsu_img      - otsu-filtered (binary) image representing a 
+                    segmentation map of where the cores are
+    window_size   - width of the window used for smoothing during grid estimation.
+                    parameter passed to `split_as_grid`
+    grid_regions  - list of tuples containing square coordinates of the form
+                    ((topleft_x, topleft_y), (width, height))
+    whole_square  - boolean: if False, each layer of the returned stack will be
+                    True only where the core is found. Alternatively, the entire
+                    square will be True
+    """
+    if grid_regions is None:
+        grid_c, grid_r = split_as_grid(otsu_img, window_size=window_size)
+        grid_regions = define_squares_from_grid(grid_c, grid_r)
+    stack = np.zeros((len(grid_regions), otsu_img.shape[0], otsu_img.shape[1]))
     for z,((c,r),(w,h)) in enumerate(grid_regions):
-        tmp = np.ones_like(img, dtype=bool)
-        tmp[r:r+h, c:c+w] = False
-        stack[z, tmp] = 0
+        region_mask = np.zeros_like(otsu_img, dtype=bool)
+        region_mask[r:r+h, c:c+w] = True
+        if whole_square:
+            stack[z, region_mask] = 1
+        else:
+            stack[z, region_mask] = otsu_img[region_mask]
+    return stack, grid_regions
 
-    return stack, grid_regions, grid_c, grid_r
 
-
-
-
-def main():
-    global args
-    args = parser.parse_args()
-    
-    prediction_performance = []
-    for thresh in args.thresh_areas:
-        for thresh_prob in args.thresh_probs:
-            total_tumour = 0
-            total_tumo_detected = 0
-            for img in imgs:
-                window_size = windows[img]
-                cores_keep = areas_keep[img]
-                region_present, N = tumour_regions(args.prob_dict, args.test_dict, img, thresh, window_size, cores_keep, thresh_prob)
-                total_tumour += N
-                total_tumo_detected += region_present
-
-            total_he = 0
-            he_detected = 0
-            for img in img_healthy:
-                window_size = windows[img]
-                cores_keep = areas_keep[img]
-                region_present, N = tumour_regions(args.prob_dict, args.test_dict, img, thresh, window_size, cores_keep, thresh_prob)
-                total_he += N
-                he_detected  += (N-region_present)
-
-            perf = {
-                "thresh_area":thresh, "thresh_prob":thresh_prob,
-                "tp": total_tumo_detected, "tn": he_detected,
-                "fp":total_he-he_detected, "fn":total_tumour-total_tumo_detected
-            }
-
-            prediction_performance.append(perf)
-
-    if not os.path.exists(args.output):
-      os.makedirs(args.output)
-    out_filename = os.path.join(args.output, 
-                                "TMA_prediction_performance_vs_area_threshold_complete.csv")
-    pd.DataFrame(prediction_performance).to_csv(out_filename)
+if __name__ == "__main__":
+    main()
 
