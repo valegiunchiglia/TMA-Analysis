@@ -20,10 +20,7 @@ from datetime import datetime
 
 
 parser = argparse.ArgumentParser(description='Pipeline used to create confusion matrix of Deep Learning output')
-parser.add_argument('--thresh_areas', nargs = "+", type=int, default='',
-                    help='list of thresholds for the minimum number of positive pixels to classify a core as tumour')
-parser.add_argument('--thresh_probs', , nargs = "+", type=int, default='',
-                    help='list of thresholds on the output DL probability to classify a pixel as positive')
+
 parser.add_argument('--output', type=str, default="", 
                     help='Output directory')
 parser.add_argument('--prob_dict', type=str, default="", 
@@ -33,9 +30,11 @@ parser.add_argument('--test_dict', type=str, default="",
 
 
 def main():
-
-    prob_dict = torch.load("ordered_perc_test.pth")
-    train_dict = torch.load("testing_newslides_06_final_correct-03.pth")
+    global args
+    args = parser.parse_args()
+    
+    prob_dict = torch.load(args.prob_dict)
+    train_dict = torch.load(args.test_dict)
 
     prediction_performance = []
     for thresh_area, thresh_prob in tqdm(thresh_combis,
@@ -75,9 +74,9 @@ def main():
         prediction_performance.append(perf)
 
     now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    pd.DataFrame(prediction_performance).to_csv(
+    pd.DataFrame(prediction_performance).to_csv(os.path.join(args.output,
         f"TMA_prediction_performance_vs_area_threshold_complete_{now}.csv"
-    )
+    ))
 
 
 def tumour_regions(prob_dict, train_dict, file_name, thresh_area, window_size, cores_keep, thresh_prob, grid_regions):
