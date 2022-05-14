@@ -20,8 +20,8 @@ The main pre-processing steps of FFPE images were:
 ```
 # First command pre-processing pipeline
 
-python3 confusion_matrix_ffpe.py \
-  --path_to_slides [path/to/output/images] \
+python3 pre_processing_tma_ffpe.py \
+  --path_to_slides [path/to/images] \
   --output [path/to/output/directory] \
   --output_h5 [path/to/output/directory/h5files]
  
@@ -36,7 +36,7 @@ python3 confusion_matrix_ffpe.py \
   --path_to_predictions [path/to/output/predictions] \
   --test_dictionary [path/to/test/dictionary] \
   --output [path/to/output/directory] \
-  --path_to_images [path/to/output/images]
+  --path_to_images [path/to/images]
  
 ```
 
