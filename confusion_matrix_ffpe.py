@@ -15,9 +15,13 @@ from tqdm import tqdm
 from skimage import filters, color, morphology, transform
 from scipy import signal
 from constants import areas_keep, img_names_healthy, img_names_tumor, thresh_combis, windows
-from tma_coords import tma_coords
 from datetime import datetime
 import argparse
+
+try:
+  from tma_coords import tma_coords
+except ModuleNotFoundError:
+  pass
 
 
 parser = argparse.ArgumentParser(description='TMA FFPE Performance evaluation')
