@@ -3,38 +3,41 @@ Confusion Matrix for Formalin-Fixed-Paraffin-Embedded Tumor Microarray (FFPE-TMA
 samples for Deep-Learning based tumor prediction
 Author: Valentina Giunchiglia
 """
+#!/Users/valentinagiunchiglia/anaconda3/bin/python
 
-import sys
 import os
+import torch
 import itertools as it
 import numpy as np
 import pandas as pd
 import openslide
-import torch
 from tqdm import tqdm
 from skimage import filters, color, morphology, transform
 from scipy import signal
 from constants import areas_keep, img_names_healthy, img_names_tumor, thresh_combis, windows
 from tma_coords import tma_coords
 from datetime import datetime
+import argparse
 
 
-parser = argparse.ArgumentParser(description='Pipeline used to create confusion matrix of Deep Learning output')
-
+parser = argparse.ArgumentParser(description='TMA FFPE Performance evaluation')
+parser.add_argument('--path_to_predictions', type=str, default='',
+                    help='path to predictions')
+parser.add_argument('--test_dictionary', type=str, default="",
+                    help='Output directory for h5 files')
 parser.add_argument('--output', type=str, default="", 
                     help='Output directory')
-parser.add_argument('--prob_dict', type=str, default="", 
-                    help='Path to the probability dictionary (output of DL model)')
-parser.add_argument('--test_dict', type=str, default="", 
-                    help='Path to test dictionary used to test the DL model')
+parser.add_argument('--path_to_images', type=str, default="", 
+                    help='path to the folder containing the TMA images')
+
+
 
 
 def main():
     global args
     args = parser.parse_args()
-    
-    prob_dict = torch.load(args.prob_dict)
-    train_dict = torch.load(args.test_dict)
+    prob_dict = torch.load(args.path_to_predictions)
+    train_dict = torch.load(args.test_dictionary)
 
     prediction_performance = []
     for thresh_area, thresh_prob in tqdm(thresh_combis,
@@ -47,7 +50,8 @@ def main():
             grid_regions = tma_coords[file_name]
             region_present, N = tumour_regions(
                 prob_dict, train_dict, file_name, thresh_area, 
-                window_size, cores_keep, thresh_prob, grid_regions
+                window_size, cores_keep, thresh_prob, grid_regions, 
+                args.path_to_images 
             )
             total_tumour += N
             total_tumo_detected += region_present
@@ -60,7 +64,8 @@ def main():
             grid_regions = tma_coords[file_name]
             region_present, N = tumour_regions(
                 prob_dict, train_dict, file_name, thresh_area, 
-                window_size, cores_keep, thresh_prob, grid_regions
+                window_size, cores_keep, thresh_prob, grid_regions, 
+                args.path_to_images 
             )
             total_he += N
             he_detected  += (N-region_present)
@@ -74,17 +79,18 @@ def main():
         prediction_performance.append(perf)
 
     now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    pd.DataFrame(prediction_performance).to_csv(os.path.join(args.output,
+    pd.DataFrame(prediction_performance).to_csv(os.path.join(args.output, 
         f"TMA_prediction_performance_vs_area_threshold_complete_{now}.csv"
     ))
 
 
-def tumour_regions(prob_dict, train_dict, file_name, thresh_area, window_size, cores_keep, thresh_prob, grid_regions):
+def tumour_regions(prob_dict, train_dict, file_name, thresh_area, window_size,
+                    cores_keep, thresh_prob, grid_regions, path_to_images):
     # Find the probability that belong to the specific file
     indices = [e for e,name in enumerate(train_dict["slides"]) if file_name in name]
     
     # Create the heatmap
-    mask_prob, image = heatmap_probs_tma(prob_dict, train_dict, indices)
+    mask_prob, image = heatmap_probs_tma(prob_dict, train_dict, indices, path_to_images)
     # Filter the regions with a probability below 0.5
     mask_prob2 = mask_prob.copy()
     mask_prob2[mask_prob2 >= thresh_prob] = 255
@@ -104,7 +110,8 @@ def tumour_regions(prob_dict, train_dict, file_name, thresh_area, window_size, c
                                                             whole_square = True)
     
     # Resize the image with the predicted probabilities
-    minitum = transform.resize(predicted_tum, tumor_region_stack.shape[1:], preserve_range=True)
+    minitum = transform.resize(predicted_tum, tumor_region_stack.shape[1:], 
+    preserve_range=True)
     
     # Intersect the images to check which image is detected
     intersection = np.logical_and(
@@ -119,11 +126,17 @@ def tumour_regions(prob_dict, train_dict, file_name, thresh_area, window_size, c
     region_present = (areas_keep > thresh_area).sum()
     return region_present, total_regions
       
-def heatmap_probs_tma(prob_dict, train_dict, indices):
-    
+
+def heatmap_probs_tma(prob_dict, train_dict, indices, path_to_images):
+    """
+    Given the dictionary containing the output probabilities of the neural network
+    and the dictionary used to test the performance of the model, it returns a 
+    heatmap of the original TMA with the pixels detected as tumour highlightes
+    """    
     slide = train_dict["slides"][indices[0]]
+    print(slide)
     basename = os.path.basename(slide)
-    img = openslide.OpenSlide("IMAGES_NEW/" + basename)
+    img = openslide.OpenSlide(os.path.join(path_to_images, basename))
     img_thumb = img.get_thumbnail((4000, 4000))
     image_final = np.zeros(img_thumb.size[:2])
     scale_factor = img_thumb.size[0] / img.dimensions[0]
@@ -156,7 +169,11 @@ def heatmap_probs_tma(prob_dict, train_dict, indices):
         
     return image_final.T, img_thumb
 
+
 def split_as_grid(img, window_size=80):
+    """
+    Given an array, it returns the grid points on the rows and the columns
+    """
     
     if len(img.shape) == 3:
         if img.shape[-1] == 3:
@@ -191,7 +208,7 @@ def define_squares_from_grid(grid_cols, grid_rows):
     return squares_info
 
 
-  def split_grid_3d_sorted(otsu_img:np.array, window_size:int,
+def split_grid_3d_sorted(otsu_img:np.array, window_size:int,
                          grid_regions:list=None, whole_square:bool=False):
     """
     Parameters
@@ -203,7 +220,7 @@ def define_squares_from_grid(grid_cols, grid_rows):
     grid_regions  - list of tuples containing square coordinates of the form
                     ((topleft_x, topleft_y), (width, height))
     whole_square  - boolean: if False, each layer of the returned stack will be
-                    True only where the core is found. Alternatively, the entire
+                    True only where the core is located. Alternatively, the entire
                     square will be True
     """
     if grid_regions is None:
@@ -222,4 +239,3 @@ def define_squares_from_grid(grid_cols, grid_rows):
 
 if __name__ == "__main__":
     main()
-
