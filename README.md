@@ -1,8 +1,6 @@
 # Automated Cancer Diagnostics via Analysis of Optical and Chemical Images by Deep and Shallow Learning
 
-
 This is the repository for the paper "Automated cancer diagnostics via analysis of optical and chemical images by deep and shallow learning". 
-
 
 ## Deep Learning
 ### Pre-processing of training data (WSI)
@@ -18,6 +16,11 @@ The main pre-processing steps of FFPE images were:
 
 ## Basic usage
 ```
+# Create the environment, and then activate it
+$ conda create --name tma python=3.7.1 ipykernel
+$ conda activate wsipp
+
+
 # First command pre-processing pipeline
 
 python3 pre_processing_tma_ffpe.py \
