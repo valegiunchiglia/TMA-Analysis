@@ -16,7 +16,7 @@ The main pre-processing steps of FFPE images were:
 4. Selection of the tiles containing less than a specific propotion of background
 5. Preparation of the dictionaries to input into the neural network
 
-# Basic usage
+## Basic usage
 ```
 # First command pre-processing pipeline
 
@@ -38,5 +38,16 @@ python3 confusion_matrix_ffpe.py \
   --output [path/to/output/directory] \
   --path_to_images [path/to/output/images]
  
- The shape of the test_dictionary must be the following:
 ```
+
+## Input data 
+
+The **test dictionary** must have the following keys:
+- ```slides```: list of paths to the images
+- ```grid```: list of list of tuples of (x, y) coordinates  
+- ```targets```: list of targets (either 1 or 0)
+- ```h5files```: list of paths to the h5 files (one for each image)
+
+The **probability dictionary** must have the following keys:
+- ```probs```: list of probabilities obtained as output of the ML model
+- ```slideIDX```: list of indices that identify to which image each tile belongs (tiles from the same image will have the same index)
