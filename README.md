@@ -18,7 +18,7 @@ The main pre-processing steps of FFPE images were:
 ```
 # Create the environment, and then activate it
 $ conda create --name tma python=3.7.1 ipykernel
-$ conda activate wsipp
+$ conda activate tma
 
 
 # First command pre-processing pipeline
