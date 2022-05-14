@@ -1,4 +1,4 @@
-# Automated cancer diagnostics via analysis of optical and chemical images by deep and shallow learning
+# Automated Cancer Diagnostics via Analysis of Optical and Chemical Images by Deep and Shallow Learning
 
 
 This is the repository for the paper "Automated cancer diagnostics via analysis of optical and chemical images by deep and shallow learning". 
